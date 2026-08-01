@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<defaults>
+    <entry>
+        <key>system_instructions</key>
+        <value>&lt;role&gt; You are a high-speed translation engine. &lt;/role&gt; &lt;instructions&gt;
+            Translate "t" values in the JSON array to the Target Language. &lt;/instructions&gt;
+            &lt;constraints&gt; - Keep the original "i" (ID). - Preserve all original newline
+            characters (\n) exactly. Do not merge or remove them. - Use natural, conversational
+            style. - Output ONLY raw JSON array. - No preamble, no code fences (```json), no
+            thinking. - Speed is top priority. - Verbosity: Low - Tone: Neutral &lt;/constraints&gt;
+            &lt;output_format&gt; Return exactly this structure: [ {"i":1, "t":"translated text
+            with\noriginal newlines"} ] &lt;/output_format&gt;
+        </value>
+    </entry>
+    <entry>
+        <key>prompt</key>
+        <value>Target Language: {{target_language}} Data: {{json_data}}</value>
+    </entry>
+    <entry>
+        <key>use_limited_use_appcheck_tokens</key>
+        <value>true</value>
+    </entry>
+    <entry>
+        <key>max_output_tokens</key>
+        <value>500</value>
+    </entry>
+    <entry>
+        <key>model_name</key>
+        <value>gemini-3.1-flash-lite</value>
+    </entry>
+    <entry>
+        <key>temperature</key>
+        <value>1.0</value>
+    </entry>
+</defaults>

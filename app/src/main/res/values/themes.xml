@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Translayerapp" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.Translayerapp.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_surface</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="postSplashScreenTheme">@style/Theme.Translayerapp</item>
+    </style>
+</resources>

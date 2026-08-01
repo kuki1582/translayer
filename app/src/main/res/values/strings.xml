@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">Translayer</string>
+    <string name="accessibility_service_label">Translayer アクセシビリティ</string>
+    <string name="accessibility_service_description">アプリの切り替えを検知して翻訳表示を自動で閉じます。情報の収集や送信は行いません。</string>
+    <string name="main_title">Translayer</string>
+    <string name="main_subtitle">共有画面の文字を AI で重ねて翻訳します</string>
+    <string name="target_language_title">翻訳後の表示言語</string>
+    <string name="source_language_title">読み取る言語（翻訳元）</string>
+    <string name="quick_picks">よく使う言語</string>
+    <string name="language_spinner_label">言語を選択</string>
+    <string name="start_translation">翻訳を開始</string>
+    <string name="stop_translation">翻訳を終了</string>
+    <string name="ad_placeholder">広告エリア</string>
+    <string name="ad_placeholder_description">広告はまだ未実装です\n将来ここにバナーを配置します</string>
+    <string name="permission_accessibility_title">アクセシビリティ設定のお願い</string>
+    <string name="permission_accessibility_message_prefix">翻訳対象のアプリから離れたときに、翻訳用のボタンや表示を自動的に隠すためにアクセシビリティ機能を利用します。これにより「どのアプリが前面に表示されているか」のみを検知しますが、個人情報の収集や外部への送信は一切行いません。</string>
+    <string name="permission_accessibility_message_highlight">「Translayer を使用」</string>
+    <string name="permission_accessibility_message_suffix"> をオンにしてください。</string>
+    <string name="permission_open_settings">設定を開く</string>
+    <string name="permission_later">あとで</string>
+    <string name="permission_media_projection_title">画面共有の許可が必要です</string>
+    <string name="permission_media_projection_message">画面内の文字を読み取って翻訳するために、次の画面で画面共有の許可が必要です。\n\n個人情報や機密情報が表示されていないことを確認してから続けてください。</string>
+    <string name="permission_continue">続ける</string>
+    <string name="permission_cancel">キャンセル</string>
+    <string name="floating_button_translate">翻訳</string>
+    <string name="notification_channel_translation_service">画面翻訳サービス</string>
+    <string name="notification_title_active">Translayer稼働中</string>
+    <string name="notification_text_ready">画面をキャプチャできる状態です</string>
+    <string name="error_no_text_found">認識できる文字が見つかりませんでした</string>
+</resources>
