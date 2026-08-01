@@ -12,13 +12,13 @@ Translayerは、Androidデバイスの画面上にあるテキストをリアル
 
 ## スクリーンショット
 
-|              ホーム               |                権限リクエストの説明                 | 
-|:------------------------------:|:-----------------------------------------:|
-| ![ホーム](docs/images/home.png) | ![権限リクエストの説明](docs/images/permission.png) |
+|                     ホーム                      |                     権限リクエストの説明                     | 
+|:--------------------------------------------:|:--------------------------------------------------:|
+| <img src="docs/images/home.png" width="300"> | <img src="docs/images/permission.png" width="300"> |
 
 |                   翻訳ボタン                   |                     翻訳表示                     |                          翻訳表示(横向き)                          |
 |:-----------------------------------------:|:--------------------------------------------:|:-----------------------------------------------------------:|
-| ![翻訳ボタン](docs/images/floating-button.png) | ![翻訳表示](docs/images/translation-overlay.png) | ![翻訳表示(横向き)](docs/images/translation-overlay-landscape.png) |
+| <img src="docs/images/floating-button.png" width="300"> | <img src="docs/images/translation-overlay.png" width="300"> | <img src="docs/images/translation-overlay-landscape.png" width="300"> |
 
 ## 技術スタック
 
