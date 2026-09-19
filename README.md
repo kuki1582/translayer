@@ -10,15 +10,10 @@ Translayerは、Androidデバイスの画面上にあるテキストをリアル
 - **言語選択**: 多数の言語ペアに対応。最近使用した言語はクイック選択から簡単に切り替え可能です。
 - **自動終了機能**: アクセシビリティサービスを利用してアプリの切り替えを検知し、別のアプリに移動した際に翻訳UIを適切に制御します。
 
-## スクリーンショット
+## 動作
 
-|                     ホーム                      |                     権限リクエストの説明                     | 
-|:--------------------------------------------:|:--------------------------------------------------:|
-| <img src="docs/images/home.png" width="300"> | <img src="docs/images/permission.png" width="300"> |
+https://github.com/user-attachments/assets/57a4f5ee-f099-402f-a48a-c9c04716f5f6
 
-|                   翻訳ボタン                   |                     翻訳表示                     |                          翻訳表示(横向き)                          |
-|:-----------------------------------------:|:--------------------------------------------:|:-----------------------------------------------------------:|
-| <img src="docs/images/floating-button.png" width="300"> | <img src="docs/images/translation-overlay.png" width="300"> | <img src="docs/images/translation-overlay-landscape.png" width="300"> |
 
 ## 技術スタック
 
