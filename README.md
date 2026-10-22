@@ -1,54 +1,70 @@
 # Translayer
 
-Translayerは、Androidデバイスの画面上にあるテキストをリアルタイムで認識し、AI（Gemini）を活用してその場に重ねて翻訳（オーバーレイ表示）するアプリです。
+インスタなどで外国語の漫画を読むとき、アプリを切り替えずにその場で読めるようにする Android アプリ。画面上の文字を認識し、Gemini で翻訳して、元の文字の位置に重ねて表示する。
+
+## デモ
+
+<img src="docs/images/demo.gif" alt="韓国語の 4 コマ漫画の吹き出しの上に、日本語の翻訳が重ねて表示される様子" width="300">
+
+フローティングボタンを押すと、表示中の画面の文字を翻訳し、吹き出しや見出しの位置にそのまま重ねて表示する(デモの漫画は、このために用意したもの)。
 
 ## 主な機能
 
-- **リアルタイム画面翻訳**: 画面録画（MediaProjection）機能を使用して、表示されている内容を即座に翻訳します。
-- **オーバーレイ表示**: 翻訳結果を元のテキストの位置に重ねて表示するため、視線の移動を最小限に抑えられます。
-- **AIによる高品質な翻訳**: Firebase Gemini (Google AI) を使用し、文脈に応じた自然な翻訳を提供します。
-- **言語選択**: 多数の言語ペアに対応。最近使用した言語はクイック選択から簡単に切り替え可能です。
-- **自動終了機能**: アクセシビリティサービスを利用してアプリの切り替えを検知し、別のアプリに移動した際に翻訳UIを適切に制御します。
+- **画面の翻訳**: 画面の取り込み(MediaProjection)で表示中の内容を読み取り、その場で翻訳する
+- **元の位置に重ねて表示**: 翻訳を元の文字の位置に重ねるので、視線を動かさずに読める
+- **言語の選択**: 翻訳元と翻訳先の言語を選べる。最近使った言語はすぐに選び直せる
+- **自動で閉じる**: アクセシビリティサービスでアプリの切り替えを検知し、翻訳していたアプリから離れたら翻訳の UI を閉じる
 
-## 動作
+## 仕組み
 
-https://github.com/user-attachments/assets/57a4f5ee-f099-402f-a48a-c9c04716f5f6
+```mermaid
+flowchart LR
+    A["画面の取り込み<br/>MediaProjection"] --> B["文字と位置の認識<br/>ML Kit"]
+    B --> C["JSON にまとめる<br/>ID・文字・位置"]
+    C --> D["翻訳<br/>Firebase AI Logic(Gemini)"]
+    D --> E["ID で元の位置に対応づけて<br/>オーバーレイで表示"]
+```
 
+1. ML Kit で文字のかたまりごとに文字と位置を認識する。翻訳元の言語に合わせて認識器(日本語・韓国語・中国語・デーヴァナーガリー・ラテン文字)を切り替える
+2. 位置は画面の大きさに対する 0〜1000 の値にそろえ、ID・文字と一緒に JSON にまとめる
+3. Firebase AI Logic で Gemini に翻訳させる。出力は JSON のスキーマで `{ID, 翻訳}` の配列に固定し、ID で元の位置に戻す
+4. 翻訳をオーバーレイで元の位置に重ねて表示する
+
+## 工夫したこと
+
+- **出力の形を固定する**: 自由な文章で返させると、どの翻訳がどの吹き出しのものか分からなくなる。JSON のスキーマを指定し、ID で元の位置と対応づけている
+- **アプリを更新せずに調整できる**: プロンプト、モデル名、出力の上限、temperature を Firebase Remote Config で管理し、アプリの既定値でも動くようにしている
+- **API の不正利用を防ぐ**: Firebase App Check(release は Play Integrity)で、正規のアプリからだけ Gemini を呼べるようにしている。トークンは使い捨て(limited-use)にしている
+- **速さを優先する**: 翻訳は軽量なモデル(既定は `gemini-3.1-flash-lite`)を使い、思考の量を最小にしている
 
 ## 技術スタック
 
-- **UI**: Jetpack Compose (Material 3)
-- **非同期処理**: Kotlin Coroutines & Flow
-- **依存注入 (DI)**: Hilt
-- **OCR (文字認識)**: ML Kit Text Recognition
-- **翻訳**: Firebase AI (Gemini Nano / Pro)
-- **バックエンド/設定**:
-    - Firebase Remote Config (プロンプト制御)
-    - Firebase App Check (セキュリティ)
-    - Firebase Analytics (利用統計)
-- **アーキテクチャ**: MVVM + Repository Pattern
+| 分野 | 技術 |
+|---|---|
+| UI | Jetpack Compose (Material 3) |
+| 非同期処理 | Kotlin Coroutines / Flow |
+| DI | Hilt |
+| 文字の認識(OCR) | ML Kit Text Recognition |
+| 翻訳 | Firebase AI Logic(Gemini Developer API) |
+| 設定・セキュリティ | Firebase Remote Config、Firebase App Check、Firebase Analytics |
+| アーキテクチャ | MVVM + Repository |
 
 ## セットアップ
 
-1. **Firebaseのプロジェクト作成**:
-    - [Firebase Console](https://console.firebase.google.com/) でプロジェクトを作成します。
-    - `google-services.json` を `app/` ディレクトリに配置します。
-
-2. **APIの有効化**:
-    - Google AI (Gemini) APIを有効にします。
-    - Firebase Remote Config は、アプリに含まれる既定値で動作します。プロンプトやモデル設定をアプリ更新なしで変更したい場合のみ、`remote_config_defaults.xml` と同名のキーを Firebase Console で設定します。
-
-3. **Firebase App Check**:
-    - release ビルドでは Play Integrity を使用します。Firebase Console で App Check を設定します。
-    - App Check を強制している状態で debug ビルドを実行する場合は、Logcat に出力されるデバッグトークンを Firebase Console の **App Check > Apps > Manage debug tokens** に登録します。トークンはリポジトリに保存しないでください。
-
-4. **ビルド**:
-    - Android Studio でプロジェクトを開き、ビルドします。
+1. **Firebase のプロジェクトを作る**
+    - [Firebase Console](https://console.firebase.google.com/) でプロジェクトを作る
+    - `google-services.json` を `app/` に置く
+2. **Firebase AI Logic を有効にする**
+    - Firebase Console の AI Logic で、Gemini Developer API を有効にする
+    - Remote Config はアプリに含まれる既定値(`app/src/main/res/xml/remote_config_defaults.xml`)で動く。アプリを更新せずにプロンプトやモデルを変えたいときだけ、同じ名前のキーを Firebase Console で設定する
+3. **Firebase App Check を設定する**
+    - release ビルドは Play Integrity を使う。Firebase Console で App Check を設定する
+    - App Check を強制した状態で debug ビルドを動かすときは、Logcat に出るデバッグトークンを Firebase Console の **App Check > Apps > Manage debug tokens** に登録する。トークンはリポジトリに保存しない
+4. **ビルドする**
+    - Android Studio でプロジェクトを開いてビルドする
 
 ## 必要な権限
 
-アプリを正常に動作させるために、以下の権限の許可が必要です：
-
-- **他のアプリの上に重ねて表示**: 翻訳結果をオーバーレイ表示するために必要です。
-- **アクセシビリティサービス**: アプリの起動状態を検知し、ユーザー体験を最適化するために使用します。
-- **画面録画の許可**: 画面上の文字を読み取るために、実行時に許可を求めます。
+- **他のアプリの上に重ねて表示**: 翻訳をオーバーレイで表示するため
+- **アクセシビリティサービス**: 前面のアプリの切り替えを検知し、翻訳の UI を閉じるため
+- **画面の取り込み**: 画面上の文字を読み取るため。使うたびに許可を求める
