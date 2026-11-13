@@ -43,6 +43,10 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // 単体テストで android.util.Log などを呼んでも落ちないようにする
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -79,6 +83,9 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+
+    // @Generable を付けたクラスから、AI の出力用 JSON スキーマを生成する
+    ksp(libs.firebase.ai.ksp.processor)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

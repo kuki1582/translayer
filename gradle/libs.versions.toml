@@ -12,6 +12,11 @@ dataStore = "1.1.7"
 composeBom = "2026.02.01"
 googleServices = "4.4.4"
 firebaseBom = "34.10.0"
+# firebase-ai-ksp-processor 17.0.0 は firebase-ai 18.0.0 と同時にリリースされた版のため、
+# firebase-ai も 18 系にそろえる (公式ドキュメントの組み合わせ: firebase-ai 18.2.0 + processor 17.0.0)。
+# BoM に含まれる firebase-ai が 18.2.0 以上になったら、この固定は外してよい
+firebaseAi = "18.2.0"
+firebaseAiKspProcessor = "17.0.0"
 coil = "2.7.0"
 kotlinxSerializationJson = "1.10.0"
 mlkitTextRecognition = "16.0.1"
@@ -41,7 +46,8 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
-firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
+firebase-ai = { group = "com.google.firebase", name = "firebase-ai", version.ref = "firebaseAi" }
+firebase-ai-ksp-processor = { group = "com.google.firebase", name = "firebase-ai-ksp-processor", version.ref = "firebaseAiKspProcessor" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 firebase-config = { group = "com.google.firebase", name = "firebase-config" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }

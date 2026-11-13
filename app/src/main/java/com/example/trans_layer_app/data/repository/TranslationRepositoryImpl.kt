@@ -4,15 +4,23 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.example.trans_layer_app.data.config.TextRecognitionType
 import com.example.trans_layer_app.data.mappers.OcrMapper
+import com.example.trans_layer_app.data.models.AiTranslatedText
+import com.example.trans_layer_app.data.models.AiTranslationResponse
 import com.example.trans_layer_app.data.models.OcrItem
+import com.example.trans_layer_app.data.models.firebaseAISchema
+import com.example.trans_layer_app.domain.models.TranslationResult
 import com.example.trans_layer_app.domain.repository.TranslationRepository
 import com.google.firebase.Firebase
 import com.google.firebase.ai.GenerativeModel
+import com.google.firebase.ai.type.FinishReason
+import com.google.firebase.ai.type.ResponseStoppedException
+import com.google.firebase.ai.type.ServerException
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -28,31 +36,77 @@ class TranslationRepositoryImpl @Inject constructor(
 
     private val recognizers = mutableMapOf<TextRecognitionType, TextRecognizer>()
 
+    private companion object {
+        const val TAG = "TranslationRepo"
+    }
+
     override suspend fun translateScreen(
         bitmap: Bitmap,
         sourceLanguageCode: String,
         targetLanguage: String
-    ): List<OcrItem> = withContext(Dispatchers.IO) {
+    ): TranslationResult = withContext(Dispatchers.IO) {
         try {
             val ocrItems = extractOcrItems(bitmap, sourceLanguageCode)
-            if (ocrItems.isEmpty()) return@withContext emptyList()
+            if (ocrItems.isEmpty()) return@withContext TranslationResult.NoTextFound
 
-            val remoteConfig = Firebase.remoteConfig
-            val userPrompt = remoteConfig.getString("prompt")
+            val userPrompt = Firebase.remoteConfig.getString("prompt")
                 .replace("{{target_language}}", targetLanguage)
                 .replace("{{json_data}}", ocrMapper.toJsonForPrompt(ocrItems))
 
-            val response = generativeModel.generateContent(userPrompt)
-            val responseText = response.text ?: throw Exception("AIからの応答が空でした")
-            val translatedItems = ocrMapper.toOcrItemList(responseText)
-
-            ocrItems.mapNotNull { item ->
-                val translatedText = translatedItems.firstOrNull { it.id == item.id }?.text?.trim()
-                if (translatedText.isNullOrEmpty()) null else item.copy(text = translatedText)
+            val response = generativeModel.generateObject(
+                AiTranslationResponse.firebaseAISchema(),
+                userPrompt
+            )
+            if (response.response.candidates.firstOrNull()?.finishReason == FinishReason.MAX_TOKENS) {
+                return@withContext TranslationResult.ResponseTruncated
             }
-        } catch (e: Exception) {
-            Log.e("TranslationRepo", "Error during translation: ${e.message}")
+
+            // getObject() は、応答が空のときや JSON として読めないときに null を返す
+            val translated = response.getObject()
+                ?: return@withContext TranslationResult.InvalidResponse
+
+            mergeTranslations(ocrItems, translated.items)
+        } catch (e: CancellationException) {
             throw e
+        } catch (e: ResponseStoppedException) {
+            // 生成が途中で止まった場合。トークン上限なら専用の結果にする
+            val finishReason = e.response.candidates.firstOrNull()?.finishReason
+            if (finishReason == FinishReason.MAX_TOKENS) {
+                TranslationResult.ResponseTruncated
+            } else {
+                Log.e(TAG, "Generation stopped: $finishReason", e)
+                TranslationResult.Failed(e)
+            }
+        } catch (e: ServerException) {
+            // 残高切れ (429 prepayment credits depleted) などもこの例外で届く。
+            // メッセージ文字列での判定は文言の変更で壊れるため、まとめてサービス側の問題として扱う
+            Log.e(TAG, "Server error during translation", e)
+            TranslationResult.ServiceUnavailable
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during translation", e)
+            TranslationResult.Failed(e)
+        }
+    }
+
+    /**
+     * OCR の結果に、AI が返した翻訳文を ID で対応付けて差し込む。
+     * 位置情報 (box2d) は AI に送っていないため、元の OCR 結果のものを使う。
+     */
+    private fun mergeTranslations(
+        ocrItems: List<OcrItem>,
+        translatedItems: List<AiTranslatedText>
+    ): TranslationResult {
+        // ID ごとに検索するとループの中でループになる (O(n²)) ため、先に Map にする
+        val translatedTextById = translatedItems.associate { it.id to it.text.trim() }
+        val merged = ocrItems.mapNotNull { item ->
+            val translatedText = translatedTextById[item.id]
+            if (translatedText.isNullOrEmpty()) null else item.copy(text = translatedText)
+        }
+        // JSON としては読めたが、ID が 1 つも一致しなかった場合も不正な応答として扱う
+        return if (merged.isEmpty()) {
+            TranslationResult.InvalidResponse
+        } else {
+            TranslationResult.Success(merged)
         }
     }
 
