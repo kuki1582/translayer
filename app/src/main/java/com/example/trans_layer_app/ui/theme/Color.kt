@@ -36,6 +36,13 @@ val OverlayShadowColor = Color.White.copy(alpha = 0.65f)
 val ProgressIndicatorColor = Color(0xFF8C7AC0)
 val ProgressTrackColor = Color.White.copy(alpha = 0.35f)
 
+// Overlay message specific colors
+// 他のアプリの画面 (画像や写真を含む) の上に出すため、背景が透けない白にして読みやすくする
+val MessageContainerColor = Color.White
+val MessageTextColor = Color(0xFF2B2440)
+// 白い画面の上でもカードの輪郭が分かるよう、薄いグレーの枠線を付ける
+val MessageBorderColor = Color.Black.copy(alpha = 0.12f)
+
 // Gradient colors
 val GlassLightPink = Color(0xECFFF7FE)
 val GlassLightPurple = Color(0xE3F1E8FF)

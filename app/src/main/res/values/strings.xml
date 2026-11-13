@@ -26,5 +26,11 @@
     <string name="notification_channel_translation_service">画面翻訳サービス</string>
     <string name="notification_title_active">Translayer稼働中</string>
     <string name="notification_text_ready">画面をキャプチャできる状態です</string>
+    <string name="error_capture_failed">画面を取得できませんでした。もう一度お試しください</string>
+    <string name="error_screen_sharing_stopped">画面の共有が停止されています。アプリを開いて、もう一度開始してください</string>
     <string name="error_no_text_found">認識できる文字が見つかりませんでした</string>
+    <string name="error_response_truncated">文字が多すぎて翻訳しきれませんでした。画面を拡大するなどして文字を減らし、もう一度お試しください</string>
+    <string name="error_invalid_response">翻訳結果を読み取れませんでした。もう一度お試しください</string>
+    <string name="error_service_unavailable">現在、翻訳サービスを利用できません。時間をおいてお試しください</string>
+    <string name="error_translation_failed">翻訳に失敗しました。しばらくしてからもう一度お試しください</string>
 </resources>

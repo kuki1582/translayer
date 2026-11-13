@@ -7,7 +7,6 @@ import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.HarmBlockThreshold
 import com.google.firebase.ai.type.HarmCategory
 import com.google.firebase.ai.type.SafetySetting
-import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.ThinkingLevel
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
@@ -34,20 +33,12 @@ object AiModule {
     fun provideGenerativeModel(): GenerativeModel {
         val remoteConfig = Firebase.remoteConfig
         
-        val jsonSchema = Schema.array(
-            Schema.obj(
-                mapOf(
-                    "i" to Schema.string(),
-                    "t" to Schema.string()
-                )
-            )
-        )
-
         val config = generationConfig {
             maxOutputTokens = remoteConfig.getLong("max_output_tokens").toInt()
             temperature = remoteConfig.getDouble("temperature").toFloat()
-            responseMimeType = "application/json"
-            responseSchema = jsonSchema
+            // 出力のスキーマと responseMimeType は generateObject() が自動で設定する。
+            // ここで responseSchema も設定すると、generateObject() が設定する
+            // responseJsonSchema と衝突して InvalidStateException になるため設定しない
             thinkingConfig = thinkingConfig {
                 thinkingLevel = ThinkingLevel.MINIMAL
             }

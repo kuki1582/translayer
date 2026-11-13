@@ -8,12 +8,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
-import android.graphics.Bitmap
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.util.Log
 import android.view.WindowManager
-import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -25,22 +25,22 @@ import androidx.savedstate.SavedStateRegistryOwner
 import com.example.trans_layer_app.R
 import com.example.trans_layer_app.data.ForegroundTrackingStore
 import com.example.trans_layer_app.data.LanguagePreferences
+import com.example.trans_layer_app.domain.models.TranslationResult
 import com.example.trans_layer_app.domain.repository.TranslationRepository
 import com.example.trans_layer_app.ui.FloatingUiManager
 import com.example.trans_layer_app.ui.state.FloatingButtonState
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 
 @AndroidEntryPoint
 class ScreenCaptureService : LifecycleService(), SavedStateRegistryOwner {
@@ -63,7 +63,6 @@ class ScreenCaptureService : LifecycleService(), SavedStateRegistryOwner {
 
     private val isTranslating = mutableStateOf(false)
     private val floatingButtonState = mutableStateOf(FloatingButtonState.INTRO)
-    private var capturedBitmap: Bitmap? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -79,10 +78,8 @@ class ScreenCaptureService : LifecycleService(), SavedStateRegistryOwner {
             savedStateRegistryOwner = this,
             floatingButtonState = floatingButtonState,
             isTranslating = isTranslating,
-            onTranslateRequest = {
-                translationJob?.cancel()
-                translationJob = lifecycleScope.launch { processTranslation() }
-            }
+            onTranslateRequest = { startTranslation() },
+            onOverlayDismiss = { cancelTranslation() }
         )
 
         updateLauncherPackages()
@@ -176,15 +173,13 @@ class ScreenCaptureService : LifecycleService(), SavedStateRegistryOwner {
         trackingArmJob = lifecycleScope.launch {
             ForegroundTrackingStore.clearTrackedPackage()
             try {
-                val detectedApp = withTimeout(2000) {
-                    ForegroundTrackingStore.currentPackage
-                        .filter { pkg ->
-                            !pkg.isNullOrBlank() &&
-                                    pkg != packageName &&
-                                    pkg != PACKAGE_SYSTEM_UI &&
-                                    pkg != PACKAGE_GOOGLE_SYSTEM_UI
-                        }
-                        .first()
+                val detectedApp = withTimeout(2000.milliseconds) {
+                    ForegroundTrackingStore.currentPackage.first { pkg ->
+                        !pkg.isNullOrBlank() &&
+                                pkg != packageName &&
+                                pkg != PACKAGE_SYSTEM_UI &&
+                                pkg != PACKAGE_GOOGLE_SYSTEM_UI
+                    }
                 }
                 ForegroundTrackingStore.setTrackedPackage(detectedApp)
             } catch (e: TimeoutCancellationException) {
@@ -193,51 +188,76 @@ class ScreenCaptureService : LifecycleService(), SavedStateRegistryOwner {
         }
     }
 
-    private suspend fun processTranslation() {
-        if (isTranslating.value) return
-        isTranslating.value = true
+    /** 翻訳を開始する。翻訳中の場合は新しいリクエストを無視する。 */
+    private fun startTranslation() {
+        if (translationJob?.isActive == true) return
+        translationJob = lifecycleScope.launch { processTranslation() }
+    }
 
+    /**
+     * ユーザーがオーバーレイを閉じたときに呼ばれる。
+     * 実行中の翻訳もキャンセルし、閉じた後に結果が再表示されないようにする。
+     */
+    private fun cancelTranslation() {
+        translationJob?.cancel()
+        translationJob = null
+        isTranslating.value = false
+        floatingUiManager.removeOverlayView()
+    }
+
+    private suspend fun processTranslation() {
+        isTranslating.value = true
         try {
             val bitmap = screenCaptureManager.captureScreen()
             if (bitmap == null) {
-                isTranslating.value = false
+                // 以前は何も表示せずに終わっていたため、ボタンを押しても反応がないように見えた
+                showError(
+                    if (screenCaptureManager.isCapturing) {
+                        R.string.error_capture_failed
+                    } else {
+                        R.string.error_screen_sharing_stopped
+                    }
+                )
                 return
             }
-            capturedBitmap = bitmap
 
-            withContext(Dispatchers.Main) {
-                floatingUiManager.showOverlayTexts(emptyList(), bitmap)
-            }
+            floatingUiManager.showOverlayTexts(emptyList(), bitmap)
 
             val targetLanguage = LanguagePreferences.getTargetPromptLabel(this)
             val sourceLanguageCode = LanguagePreferences.getSourceLanguageCode(this)
-            val results =
+            val result =
                 translationRepository.translateScreen(bitmap, sourceLanguageCode, targetLanguage)
 
-            withContext(Dispatchers.Main) {
-                isTranslating.value = false
-                if (results.isEmpty()) {
-                    floatingUiManager.removeOverlayView()
-                    Toast.makeText(
-                        this@ScreenCaptureService,
-                        getString(R.string.error_no_text_found),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                floatingUiManager.showOverlayTexts(results, bitmap)
-                }
+            // 結果のオーバーレイをローディング表示なしで描画するため、先にフラグを戻す
+            isTranslating.value = false
+            when (result) {
+                is TranslationResult.Success ->
+                    floatingUiManager.showOverlayTexts(result.items, bitmap)
+
+                TranslationResult.NoTextFound -> showError(R.string.error_no_text_found)
+                TranslationResult.ResponseTruncated -> showError(R.string.error_response_truncated)
+                TranslationResult.InvalidResponse -> showError(R.string.error_invalid_response)
+                TranslationResult.ServiceUnavailable -> showError(R.string.error_service_unavailable)
+                is TranslationResult.Failed -> showError(R.string.error_translation_failed)
             }
+        } catch (e: CancellationException) {
+            // キャンセルはエラーではないので、そのまま上に伝える
+            // (握りつぶすとコルーチンが正しく終了しない)
+            throw e
         } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                isTranslating.value = false
-                floatingUiManager.removeOverlayView()
-                Toast.makeText(
-                    this@ScreenCaptureService,
-                    "翻訳に失敗しました: ${e.message}",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
+            // キャプチャや設定の読み込みなど、Repository の外で起きた想定外のエラー
+            Log.e(TAG, "Translation failed", e)
+            showError(R.string.error_translation_failed)
+        } finally {
+            // 成功・失敗・キャンセルのどの場合でも、翻訳中フラグを必ず戻す
+            isTranslating.value = false
         }
+    }
+
+    private fun showError(@StringRes messageRes: Int) {
+        floatingUiManager.removeOverlayView()
+        // Toast は通知が許可されていないと表示されないため、オーバーレイで表示する
+        floatingUiManager.showMessage(getString(messageRes))
     }
 
     private fun dismissFloatingUi() {
@@ -298,6 +318,7 @@ class ScreenCaptureService : LifecycleService(), SavedStateRegistryOwner {
     companion object {
         const val RESULT_CODE = "RESULT_CODE"
         const val DATA = "DATA"
+        private const val TAG = "ScreenCaptureService"
         private const val PACKAGE_SYSTEM_UI = "com.android.systemui"
         private const val PACKAGE_GOOGLE_SYSTEM_UI = "com.google.android.systemui"
 

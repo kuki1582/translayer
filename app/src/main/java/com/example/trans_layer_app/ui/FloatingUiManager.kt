@@ -18,6 +18,7 @@ import com.example.trans_layer_app.data.models.OcrItem
 import com.example.trans_layer_app.ui.components.FLOATING_BUTTON_CONTENT_SIZE_DP
 import com.example.trans_layer_app.ui.components.FLOATING_BUTTON_WINDOW_PADDING_DP
 import com.example.trans_layer_app.ui.components.FloatingButton
+import com.example.trans_layer_app.ui.components.OverlayMessage
 import com.example.trans_layer_app.ui.components.TranslationOverlay
 import com.example.trans_layer_app.ui.theme.TranslayerappTheme
 import com.example.trans_layer_app.ui.state.FloatingButtonState
@@ -33,34 +34,32 @@ class FloatingUiManager(
     private val savedStateRegistryOwner: SavedStateRegistryOwner,
     private val floatingButtonState: MutableState<FloatingButtonState>,
     private val isTranslating: MutableState<Boolean>,
-    private val onTranslateRequest: () -> Unit
+    private val onTranslateRequest: () -> Unit,
+    private val onOverlayDismiss: () -> Unit
 ) {
     private var floatingView: ComposeView? = null
     private var floatingButtonParams: WindowManager.LayoutParams? = null
     private var overlayView: ComposeView? = null
+    private var messageView: ComposeView? = null
+    private var messageDismissJob: Job? = null
 
     private var floatingButtonMotionJob: Job? = null
     private var floatingButtonIntroJob: Job? = null
 
     companion object {
+        private const val TAG = "FloatingUiManager"
         private const val FLOATING_BUTTON_MARGIN_DP = 16
         private const val FLOATING_BUTTON_TOP_OFFSET_DP = 72
         private const val FLOATING_BUTTON_COLLAPSED_VISIBLE_DP = 32
         private const val FLOATING_BUTTON_INTRO_DURATION_MS = 1800L
+        private const val MESSAGE_DURATION_MS = 3000L
     }
 
     fun showFloatingButton() {
         if (floatingView != null) return
 
-        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-        val density = context.resources.displayMetrics.density
-        val windowSizePx =
-            ((FLOATING_BUTTON_CONTENT_SIZE_DP + FLOATING_BUTTON_WINDOW_PADDING_DP * 2) * density).toInt()
+        val layoutType = overlayWindowType()
+        val windowSizePx = getFloatingButtonWindowSizePx()
 
         val params = WindowManager.LayoutParams(
             windowSizePx,
@@ -197,7 +196,7 @@ class FloatingUiManager(
         runCatching {
             windowManager.updateViewLayout(view, params)
         }.onFailure { e ->
-            Log.e("FloatingUiManager", "Layout update failed: ${e.message}")
+            Log.e(TAG, "Layout update failed", e)
         }
     }
 
@@ -207,12 +206,7 @@ class FloatingUiManager(
     ) {
         removeOverlayView()
 
-        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
+        val layoutType = overlayWindowType()
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -238,10 +232,8 @@ class FloatingUiManager(
                         results = results,
                         isLoading = isTranslating.value,
                         backgroundBitmap = capturedBitmap,
-                        onClick = {
-                            isTranslating.value = false
-                            removeOverlayView()
-                        }
+                        // 状態の変更はService側に任せる（翻訳ジョブのキャンセルも必要なため）
+                        onClick = onOverlayDismiss
                     )
                 }
             }
@@ -257,13 +249,84 @@ class FloatingUiManager(
         }
     }
 
+    /**
+     * フローティングボタンの近くに、短いメッセージを [MESSAGE_DURATION_MS] だけ表示する。
+     *
+     * Service からの Toast は通知が許可されていないと表示されない
+     * (Logcat に "Suppressing toast ... by user request" と出る) ため、自前のオーバーレイで表示する。
+     * タッチは下のアプリにそのまま通す。
+     */
+    fun showMessage(message: String) {
+        removeMessageView()
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayWindowType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            // ボタンが画面の上半分にあれば下に、下半分にあれば上に表示する
+            val buttonTop = floatingButtonParams?.y ?: getFloatingButtonTopY()
+            val (_, screenHeight) = WindowUtils.getScreenSize(context)
+            if (buttonTop < screenHeight / 2) {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                y = buttonTop + getFloatingButtonWindowSizePx()
+            } else {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                y = screenHeight - buttonTop
+            }
+        }
+
+        val view = ComposeView(context).apply {
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
+            setContent {
+                TranslayerappTheme {
+                    OverlayMessage(message = message)
+                }
+            }
+        }
+        windowManager.addView(view, params)
+        messageView = view
+
+        messageDismissJob = lifecycleOwner.lifecycleScope.launch {
+            delay(MESSAGE_DURATION_MS)
+            removeMessageView()
+        }
+    }
+
+    private fun removeMessageView() {
+        messageDismissJob?.cancel()
+        messageDismissJob = null
+        messageView?.let {
+            windowManager.removeView(it)
+            messageView = null
+        }
+    }
+
     fun cleanup() {
         stopAnimations()
         removeOverlayView()
+        removeMessageView()
         floatingView?.let {
             windowManager.removeView(it)
             floatingView = null
         }
+    }
+
+    private fun overlayWindowType(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+    private fun getFloatingButtonWindowSizePx(): Int {
+        val density = context.resources.displayMetrics.density
+        return ((FLOATING_BUTTON_CONTENT_SIZE_DP + FLOATING_BUTTON_WINDOW_PADDING_DP * 2) * density).toInt()
     }
 
     private fun getExpandedButtonX(): Int {
